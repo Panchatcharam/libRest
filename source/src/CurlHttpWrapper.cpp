@@ -106,12 +106,12 @@ int CurlHttpWrapper::PostData(const std::string deviceUri, const RestApiData & d
 	int status = SUCCESS;
 	{
 		std::lock_guard<std::mutex> queuelock(mPostQueueMutex);
-		mPostQueue.push(std::make_pair(deviceUri,data));
+		mPostQueue.push(std::make_pair(deviceUri,std::unique_ptr<RestApiData>(new RestApiData(data))));
 	}
 	return status;
 }
 
-int CurlHttpWrapper::Post(const std::pair<std::string, RestApiData> & data)
+int CurlHttpWrapper::Post(const std::pair<std::string, std::unique_ptr<RestApiData>> & data)
 {
 	int status = FAILURE;
 	std::string url = serverUrl + data.first;
@@ -122,7 +122,7 @@ int CurlHttpWrapper::Post(const std::pair<std::string, RestApiData> & data)
 	strPostStatus.clear();
 
 	// Format data to be sent
-	mJson->FormatDevicePollingData(data.second, postData);
+	mJson->FormatDevicePollingData(*(data.second), postData);
 
 	// Format json data to std string
 	std::string payLoad(postData.toStyledString());
@@ -222,7 +222,7 @@ int CurlHttpWrapper::DeleteData(const std::string deviceUri)
 
 void CurlHttpWrapper::HandlePostData()
 {
-	std::pair<std::string,RestApiData> payLoad = {};
+	std::pair<std::string,std::unique_ptr<RestApiData>> payLoad = {};
 	bool empty = false;
 	while(mActive.load(std::memory_order_relaxed))
 	{
@@ -231,7 +231,7 @@ void CurlHttpWrapper::HandlePostData()
 			empty = mPostQueue.empty();
 			if (!empty)
 			{
-				payLoad = mPostQueue.front();
+				payLoad = std::move(mPostQueue.front());
 				mPostQueue.pop();
 			}
 		}
@@ -370,7 +370,7 @@ struct curl_slist* CurlHttpWrapper::addSecurityHeaders(int data_type)
 	char ctime[12];
 	snprintf(ctime, sizeof(ctime), "%ld", time(0));
 	const std::string sstm(ctime);
-	const std::string key("");
+	const std::string key("lop+2dzuioa/000mojijiaop");
 	const std::string token(key + sstm);
 
 	std::string sstm_encoded = base64_encode(

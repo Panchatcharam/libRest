@@ -24,7 +24,7 @@ private:
 	// Post data up to server (create)
 	int PostData(const std::string deviceUri, const RestApiData & data);
 
-	int Post(const std::pair<std::string, RestApiData> & data);
+	int Post(const std::pair<std::string, std::unique_ptr<RestApiData>> & data);
 
 	//Get Data from server
 	int GetData(const std::string deviceUri);
@@ -53,7 +53,7 @@ private:
 	std::thread mPostThread;
 
 	// POST Queue
-	std::queue<std::pair<std::string, RestApiData>> mPostQueue;
+	std::queue<std::pair<std::string, std::unique_ptr<RestApiData>>> mPostQueue;
 
 	// Mutex to protect post queue
 	std::mutex mPostQueueMutex;
