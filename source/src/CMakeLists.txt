@@ -18,24 +18,28 @@ set(DependLibs
     ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/openssl/libssl.so.1.0.0
     ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/openssl/libcrypto.so
     ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/openssl/libcrypto.so.1.0.0
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/log4cplus/liblog4cplus.so
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/log4cplus/liblog4cplus-1.2.so.5
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/log4cplus/liblog4cplus-1.2.so.5.1.4
     )
 
 set(Libraries
    libcurl.so
    libssl.so
    libcrypto.so
+   liblog4cplus.so
    )
 
 set(LibraryDirs
    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/curl
    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/openssl
-   #${CMAKE_CURRENT_SOURCE_DIR}/../../lib/log4cplus
+   ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/log4cplus
    )
 set(ClInclude
    #${CMAKE_CURRENT_SOURCE_DIR}/main.h
    ${CMAKE_CURRENT_SOURCE_DIR}/CommonDefs.h
    ${CMAKE_CURRENT_SOURCE_DIR}/CurlHttpWrapper.h
-   ${CMAKE_CURRENT_SOURCE_DIR}/JsonParser.h
+   #${CMAKE_CURRENT_SOURCE_DIR}/JsonParser.h
    ${CMAKE_CURRENT_SOURCE_DIR}/RestAPIFacade.h
    ${CMAKE_CURRENT_SOURCE_DIR}/Base64.h
    ${CMAKE_CURRENT_SOURCE_DIR}/sha256.h)
@@ -43,9 +47,9 @@ set(ClInclude
 set(ClCompile
    #${CMAKE_CURRENT_SOURCE_DIR}/main.cpp
    ${CMAKE_CURRENT_SOURCE_DIR}/CurlHttpWrapper.cpp
-   ${CMAKE_CURRENT_SOURCE_DIR}/JsonParser.cpp
+   #${CMAKE_CURRENT_SOURCE_DIR}/JsonParser.cpp
    ${CMAKE_CURRENT_SOURCE_DIR}/RestAPIFacade.cpp
-   ${CMAKE_CURRENT_SOURCE_DIR}/jsoncpp.cpp
+   #${CMAKE_CURRENT_SOURCE_DIR}/jsoncpp.cpp
    ${CMAKE_CURRENT_SOURCE_DIR}/Base64.cpp
    ${CMAKE_CURRENT_SOURCE_DIR}/sha256.cpp)
    

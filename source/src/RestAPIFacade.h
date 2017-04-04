@@ -33,21 +33,21 @@ public:
 	static RestAPIFacade * GetInstance(const std::string & url="");
 
 	// Http POST call
-	int CreateDeviceData(const std::string deviceUri, const RestApiData & data);
+	int CreateDeviceData(const std::string deviceUri, const rest::RestData & data);
 
 	// Http GET call
 	int GetDeviceData(const std::string deviceUri);
 
 	// Http PUT call
-	int UpdateDeviceData(const std::string deviceUri, const RestApiData & data);
+	int UpdateDeviceData(const std::string deviceUri, const rest::RestData & data);
 
 	// Http DELETE call
 	int RemoveDeviceData(const std::string deviceUri);
 
 	// Set certificate attributes
-	int SetCertificateAttributes(const Certificate & cert);
+	int SetCertificateAttributes(const rest::Certificate & cert);
 
-	void PostPollingData(const std::string deviceUri, const std::string jsonData);
+	void PostPollingData(const std::string deviceUri, const rest::RestData data);
 };
 
 #endif /* RESTAPIFACADE_H_ */

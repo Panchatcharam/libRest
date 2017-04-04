@@ -12,7 +12,7 @@ elseif(UNIX)
         endif()
 
         set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -ldl -v -pedantic -Werror -o0 -g -std=c++11" )
-        set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated -D_GLIBCXX_USE_CXX11_ABI=0 -Wno-error=sign-compare")
+        set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated -Wno-error=sign-compare")
     
     endif()
 endif()

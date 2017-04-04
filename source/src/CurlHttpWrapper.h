@@ -15,22 +15,28 @@
 #include <mutex>
 #include <atomic>
 #include <string>
+#include <exception>
 #include "CommonDefs.h"
-#include "JsonParser.h"
+//#include "JsonParser.h"
+#include <log4cplus/logger.h>
+#include <log4cplus/loggingmacros.h>
+#include <log4cplus/configurator.h>
+#include <log4cplus/fileappender.h>
 
 class CurlHttpWrapper
 {
 private:
-	// Post data up to server (create)
-	int PostData(const std::string deviceUri, const RestApiData & data);
 
-	int Post(const std::pair<std::string, std::unique_ptr<RestApiData>> & data);
+	// Post data up to server (create)
+	int PostData(const std::string deviceUri, const rest::RestData & data);
+
+	int Post(const std::pair<std::string, std::unique_ptr<rest::RestData>> & data);
 
 	//Get Data from server
 	int GetData(const std::string deviceUri);
 
 	// Put data up to server (update/replace)
-	int PutData(const std::string deviceUri, const RestApiData & data);
+	int PutData(const std::string deviceUri, const rest::RestData & data);
 
 	//Delete data from server
 	int DeleteData(const std::string deviceUri);
@@ -44,16 +50,23 @@ private:
 	// Function to handle write callback
 	static size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *userp);
 
+	// Method to add security headers
 	struct curl_slist* addSecurityHeaders(int data_type);
+
+	// Object to hold logger objects.
+	log4cplus::Logger mLogger;
 
 	// To hold an instance to the CURL
 	std::unique_ptr<CURL,decltype(&curl_easy_cleanup)> mCurl;
+
+	// Function declaration for lambda
+	std::function<void(CURLcode, std::string)> LogError;
 
 	// Thread to handle the requests
 	std::thread mPostThread;
 
 	// POST Queue
-	std::queue<std::pair<std::string, std::unique_ptr<RestApiData>>> mPostQueue;
+	std::queue<std::pair<std::string, std::unique_ptr<rest::RestData>>> mPostQueue;
 
 	// Mutex to protect post queue
 	std::mutex mPostQueueMutex;
@@ -65,10 +78,10 @@ private:
 	const std::string serverUrl;
 
 	// Certificate attributes
-	Certificate cert;
+	rest::Certificate cert;
 
 	// To hold an instance to json wrapper
-	std::unique_ptr<JsonWrapper> mJson;
+    //std::unique_ptr<JsonWrapper> mJson;
 
 	// To hold the return status
 	std::string strPostStatus;
@@ -77,12 +90,6 @@ private:
 	std::mutex mPollingMutex;
 
 public:
-
-	enum DATA_TYPE
-	{
-		TYPE_JSON = 0,
-		TYPE_WWW_FORM
-	};
 
 	// Constructor
 	CurlHttpWrapper(const std::string & url);
@@ -98,13 +105,13 @@ public:
 	CurlHttpWrapper & operator=(CurlHttpWrapper && rhs) = delete;
 
 	// Http POST call
-	int CreateDeviceData(const std::string deviceUri, const RestApiData & data);
+	int CreateDeviceData(const std::string deviceUri, const rest::RestData & data);
 
 	// Http GET call
 	int GetDeviceData(const std::string deviceUri);
 
 	// Http PUT call
-	int UpdateDeviceData(const std::string deviceUri, const RestApiData & data);
+	int UpdateDeviceData(const std::string deviceUri, const rest::RestData & data);
 
 	// Http DELETE call
 	int RemoveDeviceData(const std::string deviceUri);
@@ -119,11 +126,21 @@ public:
 	int UpdateTLSInfo();
 
 	// Update certificate attributes
-	int SetCertificateAttributes(const Certificate & cert);
+	int SetCertificateAttributes(const rest::Certificate & cert);
 
-	int PostPollingData(const std::string deviceUri, const std::string jsonData);
+	int PostPollingData(const std::string deviceUri, const rest::RestData & data);
 };
 
+class MyException : public std::exception
+{
+public:
+	MyException() {}
+	~MyException() {}
 
+	const char* what() const throw()
+	{
+		return "CurlHttpWrapper Exception";
+	}
+};
 
 #endif /* CURLHTTPWRAPPER_H_ */

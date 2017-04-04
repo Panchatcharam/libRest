@@ -80,9 +80,9 @@ RestAPIFacade * RestAPIFacade::GetInstance(const std::string & url)
 }
 
 // Http POST call
-int RestAPIFacade::CreateDeviceData(const std::string deviceUri, const RestApiData & data)
+int RestAPIFacade::CreateDeviceData(const std::string deviceUri, const rest::RestData & data)
 {
-	int status = SUCCESS;
+	int status = rest::SUCCESS;
 	curlpImpl->Get()->CreateDeviceData(deviceUri, data);
 	return status;
 }
@@ -90,31 +90,31 @@ int RestAPIFacade::CreateDeviceData(const std::string deviceUri, const RestApiDa
 // Http GET call
 int RestAPIFacade::GetDeviceData(const std::string deviceUri)
 {
-	int status = SUCCESS;
+	int status = rest::SUCCESS;
 	curlpImpl->Get()->GetDeviceData(deviceUri);
 	return status;
 }
 
 // Http PUT call
-int RestAPIFacade::UpdateDeviceData(const std::string deviceUri, const RestApiData & data)
+int RestAPIFacade::UpdateDeviceData(const std::string deviceUri, const rest::RestData & data)
 {
-	int status = SUCCESS;
+	int status = rest::SUCCESS;
 	return status;
 }
 
 // Http DELETE call
 int RestAPIFacade::RemoveDeviceData(const std::string deviceUri)
 {
-	int status = SUCCESS;
+	int status = rest::SUCCESS;
 	return status;
 }
 
-int RestAPIFacade::SetCertificateAttributes(const Certificate & cert)
+int RestAPIFacade::SetCertificateAttributes(const rest::Certificate & cert)
 {
 	return (curlpImpl->Get()->SetCertificateAttributes(cert));
 }
 
-void RestAPIFacade::PostPollingData(const std::string deviceUri, const std::string jsonData)
+void RestAPIFacade::PostPollingData(const std::string deviceUri, const rest::RestData data)
 {
-	curlpImpl->Get()->PostPollingData(deviceUri, jsonData);
+	curlpImpl->Get()->PostPollingData(deviceUri, data);
 }
