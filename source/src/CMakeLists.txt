@@ -11,30 +11,44 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../include/)
 set(CMAKE_STATIC_LIBRARY_PREFIX "lib")
 set(LIB_INSTALL_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../../install)
 
-set(DependLibs
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/curl/libcurl.so
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/curl/libcurl.so.4.4.0
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/openssl/libssl.so
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/openssl/libssl.so.1.0.0
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/openssl/libcrypto.so
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/openssl/libcrypto.so.1.0.0
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/log4cplus/liblog4cplus.so
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/log4cplus/liblog4cplus-1.2.so.5
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/log4cplus/liblog4cplus-1.2.so.5.1.4
-    )
+# Set libs to be installed
+file(GLOB InstallLibs "${CMAKE_CURRENT_SOURCE_DIR}/../../lib/log4cplus/liblog4cplus*")
 
-set(Libraries
-   libcurl.so
-   libssl.so
-   libcrypto.so
-   liblog4cplus.so
-   )
+# Find required libraries
+set( Libraries liblog4cplus.so )
 
-set(LibraryDirs
-   ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/curl
-   ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/openssl
-   ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/log4cplus
-   )
+#Curl libraries
+find_package(CURL REQUIRED)
+if(CURL_FOUND)
+  include_directories( ${CURL_INCLUDE_DIR} )
+  message(STATUS "Found Curl version ${CURL_VERSION_STRING}")
+  set( Libraries ${Libraries} ${CURL_LIBRARIES} )
+else(CURL_FOUND)
+  message(FATAL_ERROR "Missing the CURL library and development files.")
+endif(CURL_FOUND)
+
+# Find OpenSSL libraries
+find_package(OpenSSL REQUIRED)
+if(OPENSSL_FOUND)
+    include_directories( ${OPENSSL_INCLUDE_DIR} )
+    set( Libraries ${Libraries} ${OPENSSL_LIBRARIES} )
+    message(STATUS "Found OpenSSL version ${OPENSSL_VERSION}")
+else(OPENSSL_FOUND)
+    message(FATAL_ERROR "Missing the OpenSSL library and development files.")
+endif(OPENSSL_FOUND)
+
+# Find Thread libraries
+find_package(Threads REQUIRED)
+if( CMAKE_THREAD_LIBS_INIT )
+    set( Libraries ${Libraries} ${CMAKE_THREAD_LIBS_INIT} )
+    message(STATUS "Found Thread Libraray ${CMAKE_THREAD_LIBS_INIT}")
+elseif(CMAKE_THREAD_LIBS_INIT)
+    message(FATAL_ERROR "Missing Thread dependencies.")
+endif(CMAKE_THREAD_LIBS_INIT)
+
+# Locate library dependencies
+set(LibraryDirs ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/log4cplus )
+
 set(ClInclude
    #${CMAKE_CURRENT_SOURCE_DIR}/main.h
    ${CMAKE_CURRENT_SOURCE_DIR}/CommonDefs.h
@@ -53,8 +67,7 @@ set(ClCompile
    ${CMAKE_CURRENT_SOURCE_DIR}/Base64.cpp
    ${CMAKE_CURRENT_SOURCE_DIR}/sha256.cpp)
    
-find_package(Threads)
-
+# Set link directories
 link_directories(${LibraryDirs})
 
 # Create Executable
@@ -63,7 +76,7 @@ link_directories(${LibraryDirs})
 # Create static library
 add_library(Rest SHARED ${ClCompile} ${ClInclude})
 
-target_link_libraries(Rest ${Libraries} ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(Rest ${Libraries})
 
 set_target_properties(Rest PROPERTIES PUBLIC_HEADER "CommonDefs.h;RestAPIFacade.h")
 
@@ -76,4 +89,4 @@ install(TARGETS Rest
         PUBLIC_HEADER DESTINATION ${LIB_INSTALL_PATH}/include)
 
 #install library directory
-install(FILES ${DependLibs} DESTINATION ${LIB_INSTALL_PATH}/lib)
+install(FILES ${InstallLibs} DESTINATION ${LIB_INSTALL_PATH}/lib)
