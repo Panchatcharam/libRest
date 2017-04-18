@@ -12,7 +12,8 @@ set(CMAKE_STATIC_LIBRARY_PREFIX "lib")
 set(LIB_INSTALL_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../../install)
 
 # Set libs to be installed
-file(GLOB InstallLibs "${CMAKE_CURRENT_SOURCE_DIR}/../../lib/log4cplus/liblog4cplus*")
+file(GLOB InstallLibs 
+          "${CMAKE_CURRENT_SOURCE_DIR}/../../lib/log4cplus/liblog4cplus*")
 
 # Find required libraries
 set( Libraries liblog4cplus.so )
@@ -90,3 +91,6 @@ install(TARGETS Rest
 
 #install library directory
 install(FILES ${InstallLibs} DESTINATION ${LIB_INSTALL_PATH}/lib)
+
+# Install config file
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/../common/config/RestAPILog.properties DESTINATION ${LIB_INSTALL_PATH}/config)

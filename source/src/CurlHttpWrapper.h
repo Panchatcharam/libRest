@@ -2,7 +2,7 @@
  * CurlWrapper.h
  *
  *  Created on: Jan 13, 2017
- *      Author: developer
+ *      Author: Panchatcharam
  */
 
 #ifndef CURLHTTPWRAPPER_H_
@@ -12,10 +12,10 @@
 #include <curl/curl.h>
 #include <thread>
 #include <queue>
-#include <mutex>
 #include <atomic>
 #include <string>
 #include <exception>
+#include <condition_variable>
 #include "CommonDefs.h"
 //#include "JsonParser.h"
 #include <log4cplus/logger.h>
@@ -33,7 +33,7 @@ private:
 	int Post(const std::pair<std::string, std::unique_ptr<rest::RestData>> & data);
 
 	//Get Data from server
-	int GetData(const std::string deviceUri);
+	int GetData(const std::string deviceUri, std::string & data);
 
 	// Put data up to server (update/replace)
 	int PutData(const std::string deviceUri, const rest::RestData & data);
@@ -62,6 +62,9 @@ private:
 	// Function declaration for lambda
 	std::function<void(CURLcode, std::string)> LogError;
 
+	// Function to free headers
+	std::function<void(struct curl_slist *)> FreeHeader;
+
 	// Thread to handle the requests
 	std::thread mPostThread;
 
@@ -75,7 +78,7 @@ private:
 	std::atomic<bool> mActive;
 
 	// Contains server url
-	const std::string serverUrl;
+	//const std::string serverUrl;
 
 	// Certificate attributes
 	rest::Certificate cert;
@@ -89,10 +92,13 @@ private:
 	// Mutex to protect polling data method
 	std::mutex mPollingMutex;
 
+	// Condition variable for queue data
+	std::condition_variable cvPostQueue;
+
 public:
 
 	// Constructor
-	CurlHttpWrapper(const std::string & url);
+	CurlHttpWrapper();
 
 	// Destructor
 	~CurlHttpWrapper();
@@ -108,7 +114,7 @@ public:
 	int CreateDeviceData(const std::string deviceUri, const rest::RestData & data);
 
 	// Http GET call
-	int GetDeviceData(const std::string deviceUri);
+	int GetDeviceData(const std::string deviceUri, std::string & data);
 
 	// Http PUT call
 	int UpdateDeviceData(const std::string deviceUri, const rest::RestData & data);
@@ -134,13 +140,16 @@ public:
 class MyException : public std::exception
 {
 public:
-	MyException() {}
+	MyException(std::string str="CurlHttpWrapper Exception") : reason(str) {}
 	~MyException() {}
 
 	const char* what() const throw()
 	{
-		return "CurlHttpWrapper Exception";
+		return reason.c_str();
 	}
+
+private:
+	std::string reason;
 };
 
 #endif /* CURLHTTPWRAPPER_H_ */

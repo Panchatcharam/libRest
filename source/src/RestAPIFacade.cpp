@@ -2,13 +2,12 @@
  * RestAPIFacade.cpp
  *
  *  Created on: Jan 12, 2017
- *      Author: developer
+ *      Author: Panchatcharam
  */
 #include "RestAPIFacade.h"
 #include "CurlHttpWrapper.h"
 
-// Initialize facade reference
-std::unique_ptr<RestAPIFacade> RestAPIFacade::FacadeRef = nullptr;
+using namespace rest;
 
 // PIMPL for Curl Http wrapper
 class RestAPIFacade::CurlpImpl
@@ -17,12 +16,12 @@ private:
 	std::unique_ptr<CurlHttpWrapper> curl;
 
 public:
-	CurlpImpl(const std::string & url = "");
+	CurlpImpl();
 	~CurlpImpl();
 	std::unique_ptr<CurlHttpWrapper> & Get();
 };
 
-RestAPIFacade::CurlpImpl::CurlpImpl(const std::string & url) try : curl(new CurlHttpWrapper(url))
+RestAPIFacade::CurlpImpl::CurlpImpl() try : curl(new CurlHttpWrapper())
 {
 
 }
@@ -43,7 +42,7 @@ std::unique_ptr<CurlHttpWrapper> & RestAPIFacade::CurlpImpl::Get()
 	return curl;
 }
 
-RestAPIFacade::RestAPIFacade(const std::string & url) try : curlpImpl(new CurlpImpl(url))
+RestAPIFacade::RestAPIFacade() try : curlpImpl(new CurlpImpl())
 {
 	curlpImpl->Get()->Start();
 }
@@ -58,25 +57,17 @@ catch(std::exception & e)
 RestAPIFacade::~RestAPIFacade()
 {
 	curlpImpl->Get()->Shutdown();
-	FacadeRef.release();
 }
 
 // Create an Instance of REST API
-RestAPIFacade * RestAPIFacade::GetInstance(const std::string & url)
+std::shared_ptr<RestAPIFacade> RestAPIFacade::GetInstance()
 {
-	if (FacadeRef == nullptr)
-	{
-		if (!url.empty())
-		{
-			FacadeRef = std::unique_ptr<RestAPIFacade>(new RestAPIFacade(url));
-		}
-		else
-		{
-			throw std::invalid_argument("Failed creating REST API object, Pass valid URL");
-		}
-	}
+	// Initialization of function-local statics is guaranteed to occur only
+	// once even when called from multiple threads, and may be more efficient
+	// than the equivalent code using std::call_once.
+	static std::shared_ptr<RestAPIFacade> rest(std::shared_ptr<RestAPIFacade>(new RestAPIFacade()));
 
-	return FacadeRef.get();
+	return rest;
 }
 
 // Http POST call
@@ -88,10 +79,10 @@ int RestAPIFacade::CreateDeviceData(const std::string deviceUri, const rest::Res
 }
 
 // Http GET call
-int RestAPIFacade::GetDeviceData(const std::string deviceUri)
+int RestAPIFacade::GetDeviceData(const std::string deviceUri, std::string & data)
 {
 	int status = rest::SUCCESS;
-	curlpImpl->Get()->GetDeviceData(deviceUri);
+	curlpImpl->Get()->GetDeviceData(deviceUri, data);
 	return status;
 }
 

@@ -2,7 +2,7 @@
  * CommonDefs.h
  *
  *  Created on: Jan 13, 2017
- *      Author: developer
+ *      Author: Panchatcharam
  */
 
 #ifndef COMMONDEFS_H_
@@ -10,7 +10,7 @@
 
 #include <iostream>
 #include <memory>
-#include <assert.h>
+#include <mutex>
 
 namespace rest
 {
@@ -34,6 +34,7 @@ namespace rest
 		TYPE_WWW_FORM
 	};
 
+	// Class to manage certificate
 	class Certificate
 	{
 	public:
@@ -57,6 +58,7 @@ namespace rest
 		std::string strKeyType;
 	};
 
+	// Class to manage new device data
 	class NewDeviceData
 	{
 	private:
@@ -104,6 +106,7 @@ namespace rest
 		std::string GetHeaderFormat() const {return strHeaderFormat;}
 	};
 
+	// Class to manage gateway data
 	class GateWayData
 	{
 	private:
@@ -150,118 +153,6 @@ namespace rest
 		int  GetOutOfService() const { return outOfService; }
 		int GetSecue() const { return secure; }
 		std::string GetHeaderFormat() const {return strHeaderFormat;}
-	};
-
-
-	class RestApiData
-	{
-	public:
-		RestApiData (std::string tag = "") : m_tag(tag)
-										   , m_status(0)
-										   , m_value(0)
-										   , m_server_time(0)
-										   , m_source_time(0)
-										   , strHeaderFormat("Content-Type: application/json")
-		{
-
-		}
-
-		RestApiData(const RestApiData & rhs)
-		{
-			this->m_tag = rhs.m_tag;
-			this->m_status = rhs.m_status;
-			this->m_value = rhs.m_value;
-			this->m_server_time = rhs.m_server_time;
-			this->m_source_time = rhs.m_source_time;
-		}
-
-		RestApiData & operator=(const RestApiData & rhs)
-		{
-			if (this != &rhs)
-			{
-				this->m_tag = rhs.m_tag;
-				this->m_status = rhs.m_status;
-				this->m_value = rhs.m_value;
-				this->m_server_time = rhs.m_server_time;
-				this->m_source_time = rhs.m_source_time;
-			}
-
-			return *this;
-		}
-
-		RestApiData(RestApiData && rhs)
-		{
-			this->m_tag = rhs.m_tag;
-			this->m_status = rhs.m_status;
-			this->m_value = rhs.m_value;
-			this->m_server_time = rhs.m_server_time;
-			this->m_source_time = rhs.m_source_time;
-
-			// Reset the source
-			rhs.m_tag.clear();
-			rhs.m_status = 0;
-			rhs.m_value = 0;
-			rhs.m_server_time = 0;
-			rhs.m_source_time = 0;
-		}
-
-		RestApiData & operator=(RestApiData && rhs)
-		{
-			assert(this != &rhs);
-
-			this->m_tag = rhs.m_tag;
-			this->m_status = rhs.m_status;
-			this->m_value = rhs.m_value;
-			this->m_server_time = rhs.m_server_time;
-			this->m_source_time = rhs.m_source_time;
-
-			// Reset the source
-			rhs.m_tag.clear();
-			rhs.m_status = 0;
-			rhs.m_value = 0;
-			rhs.m_server_time = 0;
-			rhs.m_source_time = 0;
-
-			return *this;
-		}
-
-		~RestApiData()
-		{
-
-		}
-
-		std::string GetTag() const { return m_tag; }
-
-		void SetStatus(int status) { m_status = status; }
-
-		int GetStatus() const { return m_status; }
-
-		void SetValue(double value) { m_value = value; }
-
-		double GetValue() const { return m_value; }
-
-		void SetServerTimeUTC(unsigned long long time) { m_server_time = time; }
-
-		unsigned long long GetServerTimeUTC() const { return m_server_time; }
-
-		void SetSourceTimeUTC(unsigned long long time) { m_source_time = time; }
-
-		long long GetSourceTimeUTC() const { return m_source_time; }
-
-		void dump() {}; // for debug purpose
-
-		void Clear() {m_tag.clear(); m_status = 0; m_value = 0; m_server_time = 0; m_source_time = 0;}
-
-		void SetHeaderFormat(const std::string & format) {strHeaderFormat = format;}
-		std::string GetHeaderFormat() const {return strHeaderFormat;}
-
-	private:
-		std::string m_tag; // tag name
-		int m_status; // status
-		double m_value; // value of pressure
-		unsigned long long m_server_time; // server time
-		unsigned long long m_source_time; // source time
-		std::string strHeaderFormat;
 	};
 
 	// Class to manage rest data

@@ -2,7 +2,7 @@
  * RestAPIFacade.h
  *
  *  Created on: Jan 12, 2017
- *      Author: developer
+ *      Author: Panchatcharam
  */
 
 #ifndef RESTAPIFACADE_H_
@@ -10,44 +10,46 @@
 
 #include "CommonDefs.h"
 
-class RestAPIFacade
+namespace rest
 {
-private:
-	static std::unique_ptr<RestAPIFacade> FacadeRef;
+	class RestAPIFacade
+	{
+	private:
 
-	// Private constructor for singleton design pattern
-	RestAPIFacade(const std::string & url = "");
+		// Private constructor for singleton design pattern
+		RestAPIFacade();
 
-	// Forward declaration for curl Private implementation
-	class CurlpImpl;
+		// Forward declaration for curl Private implementation
+		class CurlpImpl;
 
-	// Unique pointer for the curl implementation
-	std::unique_ptr<CurlpImpl> curlpImpl;
+		// Unique pointer for the curl implementation
+		std::unique_ptr<CurlpImpl> curlpImpl;
 
-public:
+	public:
 
-	// Destructor
-	~RestAPIFacade();
+		// Destructor
+		~RestAPIFacade();
 
-	// Create an Instance of REST API
-	static RestAPIFacade * GetInstance(const std::string & url="");
+		// Create an Instance of REST API
+		static std::shared_ptr<RestAPIFacade> GetInstance();
 
-	// Http POST call
-	int CreateDeviceData(const std::string deviceUri, const rest::RestData & data);
+		// Http POST call
+		int CreateDeviceData(const std::string deviceUri, const rest::RestData & data);
 
-	// Http GET call
-	int GetDeviceData(const std::string deviceUri);
+		// Http GET call
+		int GetDeviceData(const std::string deviceUri, std::string & data);
 
-	// Http PUT call
-	int UpdateDeviceData(const std::string deviceUri, const rest::RestData & data);
+		// Http PUT call
+		int UpdateDeviceData(const std::string deviceUri, const rest::RestData & data);
 
-	// Http DELETE call
-	int RemoveDeviceData(const std::string deviceUri);
+		// Http DELETE call
+		int RemoveDeviceData(const std::string deviceUri);
 
-	// Set certificate attributes
-	int SetCertificateAttributes(const rest::Certificate & cert);
+		// Set certificate attributes
+		int SetCertificateAttributes(const rest::Certificate & cert);
 
-	void PostPollingData(const std::string deviceUri, const rest::RestData data);
-};
+		void PostPollingData(const std::string deviceUri, const rest::RestData data);
+	};
+}
 
 #endif /* RESTAPIFACADE_H_ */
