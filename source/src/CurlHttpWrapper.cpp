@@ -10,21 +10,19 @@
 #include "Base64.h"
 #include "sha256.h"
 
-std::atomic<long> Req_Sent(0);
-std::atomic<long> Req_Recvd(0);
-
 // Constructor, Initialize the curl
 CurlHttpWrapper::CurlHttpWrapper() try : mCurl(InitCurl(), curl_easy_cleanup)
-                                                         , mPostThread(std::thread(&CurlHttpWrapper::HandlePostData, this))
-                                                         , mPostQueue()
-														 , mPostQueueMutex()
+                                                         , mHttpThread(std::thread(&CurlHttpWrapper::HandleHttpRequest, this))
+														 , mHttpQueueMutex()
 														 , mActive{false}
 //                                   	   	   	   	   	 , serverUrl("")
 														 , cert()
 //														 , mJson(new JsonWrapper)
-														 , strPostStatus("")
+														 , strHttpStatus("")
 														 , mPollingMutex()
-														 , cvPostQueue()
+														 , cvHttpDataQueue()
+                                                         , mHttpDataQueue()
+														 , strHttpGetData("")
 {
 	LogError = [this](CURLcode errCode, std::string errStr)
 	{
@@ -47,7 +45,7 @@ CurlHttpWrapper::CurlHttpWrapper() try : mCurl(InitCurl(), curl_easy_cleanup)
 		}
 	};
 
-//	mPostThread = std::thread(&CurlHttpWrapper::HandlePostData, this);
+//	mHttpThread = std::thread(&CurlHttpWrapper::HandleHttpRequest, this);
 
 	LOG4CPLUS_DEBUG (mLogger, "Created CurlHttpWrapper");
 }
@@ -63,9 +61,9 @@ CurlHttpWrapper::~CurlHttpWrapper()
 {
 	LOG4CPLUS_DEBUG (mLogger, "Destructed CurlHttpWrapper");
 
-	if ( mPostThread.joinable() )
+	if ( mHttpThread.joinable() )
 	{
-		mPostThread.join();
+		mHttpThread.join();
 	}
 
 	curl_global_cleanup();
@@ -110,12 +108,12 @@ void CurlHttpWrapper::Start()
 {
 	if (mActive.load(std::memory_order_relaxed) == false)
 	{
-		std::lock_guard<std::mutex> lock(mPostQueueMutex);
+		std::lock_guard<std::mutex> lock(mHttpQueueMutex);
 		mActive.store(true,std::memory_order_relaxed);
 		curl_easy_setopt(mCurl.get(), CURLOPT_WRITEFUNCTION, CurlHttpWrapper::WriteCallback);
-		curl_easy_setopt(mCurl.get(), CURLOPT_WRITEDATA, &strPostStatus);
+		curl_easy_setopt(mCurl.get(), CURLOPT_WRITEDATA, &strHttpStatus);
 		LOG4CPLUS_DEBUG (mLogger, "Activated the  CurlHttpWrapper");
-		cvPostQueue.notify_one();
+		cvHttpDataQueue.notify_one();
 	}
 }
 
@@ -123,17 +121,16 @@ void CurlHttpWrapper::Shutdown()
 {
 	if (mActive.load(std::memory_order_relaxed))
 	{
-		std::lock_guard<std::mutex> lock(mPostQueueMutex);
+		std::lock_guard<std::mutex> lock(mHttpQueueMutex);
 		LOG4CPLUS_DEBUG (mLogger, "Deactivated the  CurlHttpWrapper");
 		mActive.store(false,std::memory_order_relaxed);
-		cvPostQueue.notify_one();
+		cvHttpDataQueue.notify_one();
 	}
 }
 
 // Http POST call
 int CurlHttpWrapper::CreateDeviceData(const std::string deviceUri, const rest::RestData & data)
 {
-//	LOG4CPLUS_DEBUG (mLogger, "Request to create device data");
 	return (PostData(deviceUri,data));
 }
 
@@ -142,7 +139,7 @@ int CurlHttpWrapper::GetDeviceData(const std::string deviceUri, std::string & da
 {
 	int status = rest::SUCCESS;
 	status = GetData(deviceUri, data);
-	LOG4CPLUS_DEBUG (mLogger, "Request to get device data");
+	LOG4CPLUS_TRACE (mLogger, "Request to get device data");
 	return status;
 }
 
@@ -150,17 +147,25 @@ int CurlHttpWrapper::GetDeviceData(const std::string deviceUri, std::string & da
 int CurlHttpWrapper::UpdateDeviceData(const std::string deviceUri, const rest::RestData & data)
 {
 	int status = rest::SUCCESS;
+	LOG4CPLUS_TRACE (mLogger, "Update device data");
+	try
+	{
+		std::lock_guard<std::mutex> queuelock(mHttpQueueMutex);
+		mHttpDataQueue.push(std::move(payload{HTTP_METHOD::PUT,deviceUri,std::unique_ptr<rest::RestData>(new rest::RestData(data))}));
+		cvHttpDataQueue.notify_one();
+	}
 
-	LOG4CPLUS_DEBUG (mLogger, "Update device data");
+	catch(...)
+	{
+		LOG4CPLUS_ERROR (mLogger, "Failed Pushing data in to queue");
+	}
 	return status;
 }
 
-// Http DELETE call
+// ####TODO: Http DELETE call
 int CurlHttpWrapper::RemoveDeviceData(const std::string deviceUri)
 {
 	int status = rest::SUCCESS;
-
-	LOG4CPLUS_DEBUG (mLogger, "Update device data");
 	return status;
 }
 
@@ -170,12 +175,10 @@ int CurlHttpWrapper::PostData(const std::string deviceUri, const rest::RestData 
 
 	try
 	{
-		std::lock_guard<std::mutex> queuelock(mPostQueueMutex);
-		LOG4CPLUS_ERROR (mLogger, "Try Locking Mutex @ CurlHttpWrapper::PostData");
-		mPostQueue.push(std::make_pair(deviceUri, std::unique_ptr<rest::RestData>(new rest::RestData(data))));
-		cvPostQueue.notify_one();
-		LOG4CPLUS_ERROR (mLogger, "Notified @ CurlHttpWrapper::PostData");
-		++Req_Recvd;
+		std::lock_guard<std::mutex> queuelock(mHttpQueueMutex);
+		mHttpDataQueue.push(std::move(payload{HTTP_METHOD::POST,deviceUri,std::unique_ptr<rest::RestData>(new rest::RestData(data))}));
+		cvHttpDataQueue.notify_one();
+		LOG4CPLUS_DEBUG (mLogger, "Pushed data in to queue");
 	}
 
 	catch(...)
@@ -186,7 +189,7 @@ int CurlHttpWrapper::PostData(const std::string deviceUri, const rest::RestData 
 	return status;
 }
 
-int CurlHttpWrapper::Post(const std::pair<std::string, std::unique_ptr<rest::RestData>> & data)
+int CurlHttpWrapper::Post(const payload & data)
 {
 	LOG4CPLUS_TRACE (mLogger, "Processing Post request");
 
@@ -195,10 +198,10 @@ int CurlHttpWrapper::Post(const std::pair<std::string, std::unique_ptr<rest::Res
 	int status = rest::FAILURE;
 	struct curl_slist *headers = nullptr;
 
-	std::string url(data.first);
+	std::string url(data.url);
 
 	// Clear the POST status info
-	strPostStatus.clear();
+	strHttpStatus.clear();
 
 	try
 	{
@@ -206,7 +209,7 @@ int CurlHttpWrapper::Post(const std::pair<std::string, std::unique_ptr<rest::Res
 		curl_easy_setopt(mCurl.get(), CURLOPT_ERRORBUFFER, errbuf);
 
 		// Format json data to std string
-		std::string payLoad(data.second->GetContent());
+		std::string pl(data.restData->GetContent());
 
 		// First set the URL that is about to receive our POST.
 		res = curl_easy_setopt(mCurl.get(), CURLOPT_URL, url.c_str());
@@ -216,7 +219,7 @@ int CurlHttpWrapper::Post(const std::pair<std::string, std::unique_ptr<rest::Res
 		}
 
 		// Format Headers
-		headers = addSecurityHeaders(data.second->GetType());
+		headers = addSecurityHeaders(data.restData->GetType());
 
 		// Pass custom made headers
 		res = curl_easy_setopt(mCurl.get(), CURLOPT_HTTPHEADER, headers);
@@ -232,14 +235,14 @@ int CurlHttpWrapper::Post(const std::pair<std::string, std::unique_ptr<rest::Res
 		}
 
 		// Set the size of the postfields data
-		res = curl_easy_setopt(mCurl.get(), CURLOPT_POSTFIELDSIZE, payLoad.length());
+		res = curl_easy_setopt(mCurl.get(), CURLOPT_POSTFIELDSIZE, pl.length());
 		if ( res != CURLE_OK )
 		{
 			throw MyException();
 		}
 
 		// Now specify the POST data
-		res = curl_easy_setopt(mCurl.get(), CURLOPT_POSTFIELDS, payLoad.c_str());
+		res = curl_easy_setopt(mCurl.get(), CURLOPT_POSTFIELDS, pl.c_str());
 		if (  res != CURLE_OK )
 		{
 			throw MyException();
@@ -253,6 +256,9 @@ int CurlHttpWrapper::Post(const std::pair<std::string, std::unique_ptr<rest::Res
 		}
 		else
 		{
+			long response(0);
+			curl_easy_getinfo(mCurl.get(), CURLINFO_RESPONSE_CODE, &response);
+			LOG4CPLUS_DEBUG (mLogger, LOG4CPLUS_TEXT("Request: POST, URL: ") << url << LOG4CPLUS_TEXT(" Resp Code: ") << response);
 			status = rest::SUCCESS;
 		}
 
@@ -272,7 +278,101 @@ int CurlHttpWrapper::Post(const std::pair<std::string, std::unique_ptr<rest::Res
 		LOG4CPLUS_DEBUG (mLogger, LOG4CPLUS_TEXT("Exception occurred"));
 	}
 
-    LOG4CPLUS_DEBUG (mLogger, LOG4CPLUS_TEXT("POST Status : ") << strPostStatus);
+    LOG4CPLUS_DEBUG (mLogger, LOG4CPLUS_TEXT("POST Status : ") << strHttpStatus);
+
+	return status;
+}
+
+int CurlHttpWrapper::Put(const payload & data)
+{
+	LOG4CPLUS_TRACE (mLogger, "Processing Put request");
+
+	CURLcode res={};
+	char errbuf[CURL_ERROR_SIZE]={0};
+	int status = rest::FAILURE;
+	struct curl_slist *headers = nullptr;
+
+	std::string url(data.url);
+
+	// Clear the POST status info
+	strHttpStatus.clear();
+
+	try
+	{
+		// Provide a buffer to store errors in
+		curl_easy_setopt(mCurl.get(), CURLOPT_ERRORBUFFER, errbuf);
+
+		// Format json data to std string
+		std::string pl(data.restData->GetContent());
+
+		// First set the URL that is about to receive our POST.
+		res = curl_easy_setopt(mCurl.get(), CURLOPT_URL, url.c_str());
+		if ( res != CURLE_OK )
+		{
+			throw MyException();
+		}
+
+		// Format Headers
+		headers = addSecurityHeaders(data.restData->GetType());
+
+		// Pass custom made headers
+		res = curl_easy_setopt(mCurl.get(), CURLOPT_HTTPHEADER, headers);
+		if ( res != CURLE_OK )
+		{
+			throw MyException();
+		}
+
+		res = curl_easy_setopt(mCurl.get(), CURLOPT_CUSTOMREQUEST, "PUT");
+		if ( res != CURLE_OK )
+		{
+			throw MyException();
+		}
+
+		// Set the size of the postfields data
+		res = curl_easy_setopt(mCurl.get(), CURLOPT_POSTFIELDSIZE, pl.length());
+		if ( res != CURLE_OK )
+		{
+			throw MyException();
+		}
+
+		// Now specify the POST data
+		res = curl_easy_setopt(mCurl.get(), CURLOPT_POSTFIELDS, pl.c_str());
+		if (  res != CURLE_OK )
+		{
+			throw MyException();
+		}
+
+		res = curl_easy_perform(mCurl.get());
+
+		if (res != CURLE_OK)
+		{
+			throw MyException();
+		}
+		else
+		{
+			long response(0);
+			curl_easy_getinfo(mCurl.get(), CURLINFO_RESPONSE_CODE, &response);
+			LOG4CPLUS_DEBUG (mLogger, LOG4CPLUS_TEXT("Request: PUT, URL: ") << url << LOG4CPLUS_TEXT(" Resp Code: ") << response);
+			status = rest::SUCCESS;
+		}
+
+		// free headers
+		FreeHeader(headers);
+	}
+
+	catch(MyException & e)
+	{
+		FreeHeader(headers);
+		LogError(res, std::string(errbuf));
+	}
+
+	catch(...)
+	{
+		FreeHeader(headers);
+		LOG4CPLUS_DEBUG (mLogger, LOG4CPLUS_TEXT("Exception occurred"));
+	}
+
+    LOG4CPLUS_DEBUG (mLogger, LOG4CPLUS_TEXT("PUT Status : ") << strHttpStatus);
 
 	return status;
 }
@@ -284,43 +384,58 @@ int CurlHttpWrapper::GetData(const std::string deviceUri, std::string & data)
 	char errbuf[CURL_ERROR_SIZE]={0};
 	std::string url(deviceUri);
 
-	// Clear the POST status info
-	strPostStatus.clear();
+	strHttpGetData.clear();
+
+	CURL * curlPtr = nullptr;
+
+	auto cleanCurl = [](CURL * ptr)
+	{
+		if (ptr != nullptr)
+		{
+		    curl_easy_cleanup(ptr);
+		    ptr = nullptr;
+		}
+	};
 
 	try
 	{
+		curlPtr = curl_easy_init();
+
+		curl_easy_setopt(curlPtr, CURLOPT_WRITEFUNCTION, CurlHttpWrapper::GetWriteCallback);
+		curl_easy_setopt(curlPtr, CURLOPT_WRITEDATA, &strHttpGetData);
+
 		// Provide a buffer to store errors in
-		curl_easy_setopt(mCurl.get(), CURLOPT_ERRORBUFFER, errbuf);
+		curl_easy_setopt(curlPtr, CURLOPT_ERRORBUFFER, errbuf);
 
 		// Set SSL verifier
-		res = curl_easy_setopt(mCurl.get(), CURLOPT_SSL_VERIFYPEER, 1L);
+		res = curl_easy_setopt(curlPtr, CURLOPT_SSL_VERIFYPEER, 1L);
 
 		if ( res != CURLE_OK)
 		{
 			throw MyException();
 		}
 
-		res = curl_easy_setopt(mCurl.get(), CURLOPT_URL, url.c_str());
+		res = curl_easy_setopt(curlPtr, CURLOPT_URL, url.c_str());
 		if ( res != CURLE_OK)
 		{
 			throw MyException();
 		}
 
 		// Require use of SSL for this, or fail
-		res = curl_easy_setopt(mCurl.get(), CURLOPT_USE_SSL, CURLUSESSL_ALL);
+		res = curl_easy_setopt(curlPtr, CURLOPT_USE_SSL, CURLUSESSL_ALL);
 		if ( res != CURLE_OK )
 		{
 			throw MyException();
 		}
 
 		// use a GET to fetch this
-		res = curl_easy_setopt(mCurl.get(), CURLOPT_HTTPGET, 1L);
+		res = curl_easy_setopt(curlPtr, CURLOPT_HTTPGET, 1L);
 		if ( res != CURLE_OK)
 		{
 			throw MyException();
 		}
 
-		res = curl_easy_perform(mCurl.get());
+		res = curl_easy_perform(curlPtr);
 
 		if ( res != CURLE_OK)
 		{
@@ -328,21 +443,29 @@ int CurlHttpWrapper::GetData(const std::string deviceUri, std::string & data)
 		}
 		else
 		{
+			long response(0);
+			curl_easy_getinfo(curlPtr, CURLINFO_RESPONSE_CODE, &response);
+			LOG4CPLUS_DEBUG (mLogger, LOG4CPLUS_TEXT("Request: GET, URL: ") << url << LOG4CPLUS_TEXT(" Resp Code: ") << response);
 			status = rest::SUCCESS;
 		}
 	}
 
 	catch(MyException & e)
 	{
+		cleanCurl(curlPtr);
 		LogError(res, std::string(errbuf));
 	}
 
 	catch(...)
 	{
+		cleanCurl(curlPtr);
 		LOG4CPLUS_DEBUG (mLogger, LOG4CPLUS_TEXT("Exception occurred"));
 	}
 
-	data = strPostStatus;
+	LOG4CPLUS_DEBUG (mLogger, LOG4CPLUS_TEXT("GET Resp: ") << strHttpGetData);
+	data = strHttpGetData;
+
+	cleanCurl(curlPtr);
 
 	return status;
 }
@@ -357,54 +480,66 @@ int CurlHttpWrapper::DeleteData(const std::string deviceUri)
 	return rest::SUCCESS;
 }
 
-void CurlHttpWrapper::HandlePostData()
+void CurlHttpWrapper::HandleHttpRequest()
 {
 	bool queueEmpty(false);
 
 	{
 		LOG4CPLUS_DEBUG(mLogger, "Entering Wait untill the ready signal is received.");
 		// Wait untill the ready signal is received.
-		std::unique_lock<std::mutex> lock(mPostQueueMutex);
-		cvPostQueue.wait(lock, [this]{return mActive.load(std::memory_order_relaxed);});
+		std::unique_lock<std::mutex> lock(mHttpQueueMutex);
+		cvHttpDataQueue.wait(lock, [this]{return mActive.load(std::memory_order_relaxed);});
 		LOG4CPLUS_DEBUG(mLogger, "Ready signal is received.");
 	}
 
 	while(mActive.load(std::memory_order_relaxed))
 	{
 		{
-			std::pair<std::string, std::unique_ptr<rest::RestData>> payLoad{};
+			payload pl = {};
 			{
-				std::lock_guard<std::mutex> queuelock(mPostQueueMutex);
-				queueEmpty = mPostQueue.empty();
+				std::lock_guard<std::mutex> queuelock(mHttpQueueMutex);
+				queueEmpty = mHttpDataQueue.empty();
 
 				if (!queueEmpty)
 				{
-					payLoad = std::move(mPostQueue.front());
-					mPostQueue.pop();
-					LOG4CPLUS_DEBUG(mLogger, LOG4CPLUS_TEXT("processing uri: ") << payLoad.first);
+					pl = std::move(mHttpDataQueue.front());
+					mHttpDataQueue.pop();
+					LOG4CPLUS_DEBUG(mLogger, LOG4CPLUS_TEXT("processing uri: ") << pl.url);
 				}
 			}
 
 			if (!queueEmpty)
 			{
-				auto status = Post(payLoad);
-
-				// Log the error if the post was not successful.
-				if (status != rest::SUCCESS)
+				int status = rest::FAILURE;
+				switch(pl.method)
 				{
-					LOG4CPLUS_ERROR(mLogger, LOG4CPLUS_TEXT("POST Failed for ") << payLoad.first);
+				    case HTTP_METHOD::POST:
+				    	status = Post(pl);
+				    	break;
+				    case HTTP_METHOD::PUT:
+				    	status = Put(pl);
+				    	break;
+				    default:
+				    	status = rest::INVALID;
+				    	LOG4CPLUS_ERROR(mLogger, LOG4CPLUS_TEXT("Invalid Request received for ") << pl.url);
+				    	break;
 				}
 
-				std::lock_guard<std::mutex> queuelock(mPostQueueMutex);
-				queueEmpty = mPostQueue.empty();
-				std::cout << "\rRequest Sent Count : " << ++Req_Sent << " Recvd Count : " << Req_Recvd;
+				// Log the error if the post was not successful.
+				if ( status == rest::FAILURE )
+				{
+					LOG4CPLUS_ERROR(mLogger, std::string(std::string(pl.method == HTTP_METHOD::POST ? "POST " : "PUT ") + "Failed for " + pl.url));
+				}
+
+				std::lock_guard<std::mutex> queuelock(mHttpQueueMutex);
+				queueEmpty = mHttpDataQueue.empty();
 			}
 		}
 
 		if (queueEmpty)
 		{
-            std::unique_lock<std::mutex> lock(mPostQueueMutex);
-            cvPostQueue.wait(lock, [this]{return (!mPostQueue.empty() || !mActive.load(std::memory_order_relaxed));});
+            std::unique_lock<std::mutex> lock(mHttpQueueMutex);
+            cvHttpDataQueue.wait(lock, [this]{return (!mHttpDataQueue.empty() || !mActive.load(std::memory_order_relaxed));});
 		}
 	}
 }
@@ -516,7 +651,7 @@ int CurlHttpWrapper::PostPollingData(const std::string deviceUri, const rest::Re
 	struct curl_slist *headers = nullptr;
 
 	// Clear the POST status info
-	strPostStatus.clear();
+	strHttpStatus.clear();
 
 	try
 	{
@@ -586,7 +721,7 @@ int CurlHttpWrapper::PostPollingData(const std::string deviceUri, const rest::Re
 		LOG4CPLUS_DEBUG (mLogger, LOG4CPLUS_TEXT("Exception occurred"));
 	}
 
-    LOG4CPLUS_DEBUG (mLogger, LOG4CPLUS_TEXT("POST Status : ") << strPostStatus);
+    LOG4CPLUS_DEBUG (mLogger, LOG4CPLUS_TEXT("POST Status : ") << strHttpStatus);
 
 	return status;
 }
@@ -598,11 +733,18 @@ size_t CurlHttpWrapper::WriteCallback(void *contents, size_t size, size_t nmemb,
     return totalSize;
 }
 
+size_t CurlHttpWrapper::GetWriteCallback(void *contents, size_t size, size_t nmemb, void *userp)
+{
+	size_t totalSize(size * nmemb);
+    ((std::string*)userp)->append((char*)contents, totalSize);
+    return totalSize;
+}
+
 struct curl_slist* CurlHttpWrapper::addSecurityHeaders(int data_type)
 {
-	const std::string sstm("");
+	const std::string sstm("0");
 	const std::string key("");
-	const std::string token("");
+	const std::string token(key + sstm);
 	std::string Data1("");
 	std::string Data2("");
 	std::string Data3("");

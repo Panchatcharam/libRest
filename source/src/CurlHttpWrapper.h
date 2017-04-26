@@ -26,11 +26,29 @@
 class CurlHttpWrapper
 {
 private:
+	enum class HTTP_METHOD
+	{
+        GET = 0,
+		POST,
+		PUT,
+		DELETE
+	};
+
+	struct payload
+	{
+		HTTP_METHOD method;
+		std::string url;
+		std::unique_ptr<rest::RestData> restData;
+	};
 
 	// Post data up to server (create)
 	int PostData(const std::string deviceUri, const rest::RestData & data);
 
-	int Post(const std::pair<std::string, std::unique_ptr<rest::RestData>> & data);
+	// Handle post request
+	int Post(const payload & data);
+
+	// Handle Put request
+	int Put(const payload & data);
 
 	//Get Data from server
 	int GetData(const std::string deviceUri, std::string & data);
@@ -45,10 +63,13 @@ private:
 	CURL * InitCurl();
 
 	// Thread method to handle post data request queue
-	void HandlePostData();
+	void HandleHttpRequest();
 
 	// Function to handle write callback
 	static size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *userp);
+
+	// Function to handle GET write callback
+	static size_t GetWriteCallback(void *contents, size_t size, size_t nmemb, void *userp);
 
 	// Method to add security headers
 	struct curl_slist* addSecurityHeaders(int data_type);
@@ -66,13 +87,10 @@ private:
 	std::function<void(struct curl_slist *)> FreeHeader;
 
 	// Thread to handle the requests
-	std::thread mPostThread;
-
-	// POST Queue
-	std::queue<std::pair<std::string, std::unique_ptr<rest::RestData>>> mPostQueue;
+	std::thread mHttpThread;
 
 	// Mutex to protect post queue
-	std::mutex mPostQueueMutex;
+	std::mutex mHttpQueueMutex;
 
 	// To track whether the REST API is active
 	std::atomic<bool> mActive;
@@ -87,13 +105,19 @@ private:
     //std::unique_ptr<JsonWrapper> mJson;
 
 	// To hold the return status
-	std::string strPostStatus;
+	std::string strHttpStatus;
 
 	// Mutex to protect polling data method
 	std::mutex mPollingMutex;
 
 	// Condition variable for queue data
-	std::condition_variable cvPostQueue;
+	std::condition_variable cvHttpDataQueue;
+
+	// POST/PUT/DELTE Queue
+	std::queue<payload> mHttpDataQueue;
+
+	// To hold GET data
+	std::string strHttpGetData;
 
 public:
 

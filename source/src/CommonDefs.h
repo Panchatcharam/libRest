@@ -24,7 +24,8 @@ namespace rest
 	enum HTTP_STATUS
 	{
 		SUCCESS = 0,
-		FAILURE
+		FAILURE,
+		INVALID
 	};
 
 	// enum to define content type

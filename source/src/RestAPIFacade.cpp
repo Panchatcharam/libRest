@@ -90,6 +90,7 @@ int RestAPIFacade::GetDeviceData(const std::string deviceUri, std::string & data
 int RestAPIFacade::UpdateDeviceData(const std::string deviceUri, const rest::RestData & data)
 {
 	int status = rest::SUCCESS;
+	curlpImpl->Get()->UpdateDeviceData(deviceUri, data);
 	return status;
 }
 
@@ -97,6 +98,7 @@ int RestAPIFacade::UpdateDeviceData(const std::string deviceUri, const rest::Res
 int RestAPIFacade::RemoveDeviceData(const std::string deviceUri)
 {
 	int status = rest::SUCCESS;
+	curlpImpl->Get()->RemoveDeviceData(deviceUri);
 	return status;
 }
 
